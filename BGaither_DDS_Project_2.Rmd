@@ -1,0 +1,420 @@
+---
+title: "BGaither_DDS_Project_2"
+author: "Bgaither"
+date: "3/17/2020"
+output: html_document
+---
+
+#Doing Data Science - Case Study 2
+
+## Executive Summary
+
+The Frito-Lay executive leadership team has identified predicting employee turnover as its first application of data science for talent management.  However, before the business gives the green light on the project, it has been requested that we conduct an analysis of existing employee data.
+
+This particular project is focused on two areas: 
+1. **Attrition**
+  + Identify the top three factors that contribute to turnover
+  + Identify the job roles that experience the highest attrition
+  + Develop a model that will predict attrition
+2. **Salary**
+  + Develop a model that will predict salaries
+
+
+## Exploratory Data Analysis
+
+We've been provided with existing employee data in a file called "CaseStudy2-data.csv"
+```{r}
+library(ggplot2)
+library(car)
+library(tidyverse)
+library(stringr)
+library(maps)
+library(GGally)
+library(caret)
+library(dplyr)
+
+#load the data
+dfEmployees = read.csv("C:/Users/BGaither/OneDrive - McAfee/Other/school/SMU/Courses/Spring 2020/Doing Data Science/Project2/CaseStudy2-data.csv",header = TRUE)
+
+```
+
+Let's evaluate which columns may have NA's (any missing data).  Our analysis indicates we have no missing data.
+```{r}
+#checking to see which columns have NA's
+colnames(dfEmployees)[colSums(is.na(dfEmployees))>0]
+```
+
+We now summarize the data by examining each column in the data set.  One thing to note is that this is an unbalanced dataset based on Attrition. There are 730 "No's" and 140 "Yes's".
+```{r}
+summary(dfEmployees)
+```
+
+We have 870 total records and 36 variables in this dataset
+```{r}
+nrow(dfEmployees)
+ncol(dfEmployees)
+```
+
+To address the fact that we have an unbalanced dataset, I've decided to downsample so that we have an equal number of Yes and No observations in the Attrition column.
+```{r}
+dfEmpDS = downSample(dfEmployees, dfEmployees$Attrition)
+```
+
+For later analysis, I've created a new column that converts overtime into 1 and 0
+```{r}
+dfEmpDS$NumOverTime = ifelse(dfEmpDS$OverTime=="Yes",1,0)
+```
+
+Examining the summary of the balanced dataset, we can see that we now have an equal number of Attrition observations
+```{r}
+summary(dfEmpDS)
+```
+
+Performing pair plots and color coding by attrition label is helpful to identify any relationships in our numerical data against attrition.
+```{r fig.height = 8, fig.width = 12}
+
+dfEmpDS %>% select(Age, DailyRate, DistanceFromHome, Education, EnvironmentSatisfaction, HourlyRate, JobSatisfaction, MonthlyIncome, MonthlyRate, NumCompaniesWorked, PercentSalaryHike, PerformanceRating, Attrition) %>% ggpairs(aes(color = Attrition)) %>% print(progress=F)
+
+```
+
+Here, we continue with pair plots using the remaining numerical variables.  Notice that there appears to be a relationship between work life balance and attrition as well as years in current role and attrition. 
+```{r fig.height = 8, fig.width = 12}
+#RelationshipSatisfaction, StandardHours, StockOptionLevel, TotalWorkingYears, TrainingTimesLastYear, WorkLifeBalance, YearsAtCompany, YearsInCurrentRole, YearsSinceLastPromotion, YearsWithCurrManager, Attrition
+dfEmpDS %>% 
+select(RelationshipSatisfaction, StandardHours, StockOptionLevel, TotalWorkingYears, TrainingTimesLastYear, WorkLifeBalance, YearsAtCompany, YearsInCurrentRole, YearsSinceLastPromotion, YearsWithCurrManager, Attrition) %>% 
+ggpairs(aes(color = Attrition)) %>% print(progress=F)
+```
+
+Next, I create a dataframe that scales all the numerical variables.
+```{r}
+dfEmpDSnum = dfEmpDS %>% 
+select(Age, DailyRate, DistanceFromHome, Education, EnvironmentSatisfaction, HourlyRate, JobSatisfaction, MonthlyIncome, MonthlyRate, NumCompaniesWorked, PercentSalaryHike, PerformanceRating,RelationshipSatisfaction, StandardHours, StockOptionLevel, TotalWorkingYears, TrainingTimesLastYear, WorkLifeBalance, YearsAtCompany, YearsInCurrentRole, YearsSinceLastPromotion, NumOverTime, YearsWithCurrManager, JobInvolvement)
+
+dfEmpCorez = as.data.frame(scale(dfEmpDSnum))
+dfEmpCorez$Attrition = dfEmpDS$Attrition
+summary(dfEmpCorez)
+
+```
+Checking to see which columns have NA's
+```{r}
+#checking to see which columns have NA's
+colnames(dfEmpCorez)[colSums(is.na(dfEmpCorez))>0]
+```
+
+Since Standard Hours have Na's, we drop it from our dataframe
+```{r}
+drops = c("StandardHours")
+dfEmpCorez = dfEmpCorez[,!(names(dfEmpCorez) %in% drops)]
+```
+
+Check again to make sure there are no other values with NA's in the resulting dataframe befor further analysis
+```{r}
+#checking to see which columns have NA's
+colnames(dfEmpCorez)[colSums(is.na(dfEmpCorez))>0]
+```
+
+## Feature Importance
+
+checking the feature importance prior to scaling the data to compare with feature importance after scaling the data.
+The following variables are most important:
+- Overtime
+- JobInvolvement
+- StockOptionLevel
+- YearsAtCompany
+- Age
+- TotalWorkingYears
+- YearsInCurrentRole
+- MonthlyIncome
+- YearsWithCurrentManager
+
+```{r}
+library(Boruta)
+
+boruta_output <- Boruta(Attrition ~ ., data=na.omit(dfEmpDS), doTrace=2) #perform Boruta search
+
+boruta_signif <- names(boruta_output$finalDecision[boruta_output$finalDecision %in% c("Confirmed", "Tentative")])
+print(boruta_signif)
+plot(boruta_output, cex.axis=.7, las=2, xlab="", main="Variable Importance")
+```
+
+Checking feature importance after scaling the data. Reveals the following most important features:
+  + Over Time
+  + Monthly Income
+  + Stock Option Level
+  + Years at Company
+  + Total Working Years
+  + Years with Current Manager
+  + Age
+  + Job Involvement
+  + Work Life Balance
+  + Daily Rate
+  + Years In Current Role
+```{r}
+library(Boruta)
+
+boruta_outputz <- Boruta(dfEmpCorez$Attrition ~ ., data=na.omit(dfEmpCorez), doTrace=2) #perform Boruta search
+
+boruta_signifz <- names(boruta_outputz$finalDecision[boruta_outputz$finalDecision %in% c("Confirmed", "Tentative")])
+print(boruta_signifz)
+plot(boruta_outputz, cex.axis=.7, las=2, xlab="", main="Variable Importance")
+```
+
+Create a dataframe that is balanced by class, scaled and has only the important features
+```{r}
+dfEmpCore = dfEmpCorez %>% select(NumOverTime, MonthlyIncome, StockOptionLevel, YearsAtCompany, TotalWorkingYears, YearsWithCurrManager, Age, JobInvolvement, WorkLifeBalance, DailyRate, YearsInCurrentRole, Attrition)
+
+
+```
+
+## Build the KNN Model
+
+Now, using our important features, we create a training and test dataset to build our model and test to determine the optimal k value which appears to be 35.
+```{r}
+library(class)
+library(caret)
+library(e1071)
+#Use a 70 - 30 train/test split to use cross validation to
+#tune the hyperparameter k
+
+
+# Loop for many k and the average of many training / test partition
+
+set.seed(12345)
+iterations = 250
+numks = 60
+splitPerc = .70
+
+masterAcc = matrix(nrow = iterations, ncol = numks)
+
+for(j in 1:iterations)
+{
+  trainIndices = sample(1:dim(dfEmpCore)[1],round(splitPerc * dim(dfEmpCore)[1]))
+  train = dfEmpCore[trainIndices,]
+  test = dfEmpCore[-trainIndices,]
+  for(i in 1:numks)
+  {
+    classifications = knn(train[,c(1:11)],test[,c(1:11)],train$Attrition, prob = TRUE, k = i)
+    table(classifications,test$Attrition)
+    CM = confusionMatrix(table(classifications,test$Attrition))
+    masterAcc[j,i] = CM$overall[1]
+  }
+  
+}
+
+MeanAcc = colMeans(masterAcc)
+
+plot(seq(1,numks,1),MeanAcc, type = "l")
+
+which.max(MeanAcc)
+max(MeanAcc)
+
+
+```
+
+Build the model using k=7 based off of the MeanAcc analysis performed above.  
+```{r}
+# k = 7
+classifications = knn(train[,c(1:11)],test[,c(1:11)],train$Attrition, prob = TRUE, k = 25)
+table(test$Attrition,classifications)
+confusionMatrix(table(test$Attrition,classifications))
+```
+
+##Attrition Classification against Competition Dataset
+
+Now we need to perform the Attrition Classification using the data set “CaseStudy2CompSet No Attrition.csv”, which has no attrition labels. So, first we load the dataset.
+```{r}
+#load the data
+dfToClassify = read.csv("C:/Users/BGaither/OneDrive - McAfee/Other/school/SMU/Courses/Spring 2020/Doing Data Science/Project2/CaseStudy2CompSet No Attrition.csv",header = TRUE)
+
+```
+
+
+Now we need to create a dataframe with the new data that scales all the necessary variables to be able to use KNN.
+```{r}
+#create the numovertime variable
+dfToClassify$NumOverTime = ifelse(dfToClassify$OverTime=="Yes",1,0)
+
+# dfToClassifynum = dfToClassify %>% 
+# select(Age, DailyRate, DistanceFromHome, Education, EnvironmentSatisfaction, HourlyRate, JobSatisfaction, MonthlyIncome, MonthlyRate, NumCompaniesWorked, PercentSalaryHike, PerformanceRating,RelationshipSatisfaction, StandardHours, StockOptionLevel, TotalWorkingYears, TrainingTimesLastYear, WorkLifeBalance, YearsAtCompany, YearsInCurrentRole, YearsSinceLastPromotion, NumOverTime, YearsWithCurrManager, JobInvolvement)
+
+dfToClassifynum = dfToClassify %>% 
+select(NumOverTime, MonthlyIncome, StockOptionLevel, YearsAtCompany, TotalWorkingYears, YearsWithCurrManager, Age, JobInvolvement, WorkLifeBalance, DailyRate, YearsInCurrentRole)
+
+dfToClassifynum_z = as.data.frame(scale(dfToClassifynum))
+#dfToClassifynum_z$Attrition = dfEmpDS$Attrition
+summary(dfToClassifynum_z)
+```
+
+Classify using the scaled data and add a column called Attrition to hold the classifications.
+```{r}
+dfToClassifynum_z$Attrition = knn(train[,c(1:11)],dfToClassifynum_z[,c(1:11)],train$Attrition, prob = TRUE, k = 35)
+```
+
+Now, we'll add the classified column Attrition to the original dataframe with the original data so that we can submit the file for grading.
+```{r}
+dfToClassify$Attrition = dfToClassifynum_z$Attrition
+```
+
+Now that we have the file with the Attrition column, output the dataframe with classifications to a csv file for grading.
+```{r}
+write.csv(dfToClassify,"C:/Users/BGaither/OneDrive - McAfee/Other/school/SMU/Courses/Spring 2020/Doing Data Science/Project2/Case2Predictions_Gaither_Attrition.csv", row.names = FALSE)
+```
+
+# Attrition by Job Role
+
+Let's analyze job role versus attrition to see if we can identify any patterns.  By simply looking a the count of attrition by job role, it looks like Sales Eecutive, Research Scientist and Labratory Technician roles have highest attrition by count.  However, this is misleading as there are a lot more people in those roles. Let's look at attrition as a percent of people to give a more accurate picture of what's going on.
+```{r}
+
+dfEmployees %>% ggplot(mapping=aes(x=JobRole, fill=Attrition)) + geom_bar() + coord_flip() + ggtitle("Attrition By Job Role") + xlab("Count by Job Role") + ylab("Job Role")
+
+```
+
+Here, we do the math to calculate the percent attrition for each role
+```{r}
+library(dplyr)
+dfHolder = dfEmployees %>% filter(Attrition == "No") %>% group_by(JobRole) %>% count(Attrition)
+dfHolder_Yes = dfEmployees %>% filter(Attrition == "Yes") %>% group_by(JobRole) %>% count(Attrition)
+dfHolder$n_Yes = dfHolder_Yes$n
+dfHolder$TotalEmps = rowSums(cbind(dfHolder$n_Yes, dfHolder$n))
+dfHolder$PercentYes = dfHolder$n_Yes / dfHolder$TotalEmps
+dfHolder$PercentNo = dfHolder$n / dfHolder$TotalEmps
+```
+
+Now, when we plot attrition as a percent by each role, we get a different picture.  We see that the top roles for attrition are:
+  + Sales Representative
+  + Human Resources
+  + Laboratory Techician
+
+```{r fig.height = 8, fig.width = 12}
+dfHolder %>% ggplot(mapping=aes(x=reorder(JobRole, -PercentYes), y=PercentYes)) + geom_col() + ggtitle("Percent Attrition by Job Role") + ylab("Percent Yes Attrition") + xlab("Job Role")
+```
+
+## Salary Analysis
+
+Let's start looking at salary data with the ultimate goal of being able to predict monthly salaries
+```{r  fig.height = 8, fig.width = 12}
+
+dfEmpDS %>% 
+select(Age, DailyRate, DistanceFromHome, Education, EnvironmentSatisfaction, HourlyRate, JobSatisfaction, MonthlyRate, NumCompaniesWorked, PercentSalaryHike, PerformanceRating, MonthlyIncome) %>% 
+ggpairs() %>% print(progress=F)
+
+```
+
+Continuing our pair plot analysis on remaining numerical data
+```{r fig.height = 8, fig.width = 12}
+#RelationshipSatisfaction, StandardHours, StockOptionLevel, TotalWorkingYears, TrainingTimesLastYear, WorkLifeBalance, YearsAtCompany, YearsInCurrentRole, YearsSinceLastPromotion, YearsWithCurrManager, Attrition
+dfEmpDS %>% 
+select(RelationshipSatisfaction, StandardHours, StockOptionLevel, TotalWorkingYears, TrainingTimesLastYear, WorkLifeBalance, YearsAtCompany, YearsInCurrentRole, YearsSinceLastPromotion, YearsWithCurrManager, MonthlyIncome) %>% 
+ggpairs() %>% print(progress=F)
+```
+After analyzing the above pair plots, I've reduced the variables down to the highest correlated values against Monthly income
+```{r}
+dfEmpDS %>% 
+select(Age, TotalWorkingYears, YearsAtCompany, YearsInCurrentRole, YearsSinceLastPromotion, YearsWithCurrManager, MonthlyIncome) %>% 
+ggpairs() %>% print(progress=F)
+```
+
+Let's log transform MonthlyIncome
+```{r}
+dfEmpDS_Log = dfEmpDS
+dfEmpDS_Log$lMonthlyIncome = log(dfEmpDS_Log$MonthlyIncome)
+dfEmpDS_Log$lYearsAtCompany = log(dfEmpDS_Log$YearsAtCompany)
+dfEmpDS_Log$lYearsInCurrentRole = log(dfEmpDS_Log$YearsInCurrentRole)
+
+```
+
+Now, let's check a further reduced set of variable correlations against a log transformed Monthly Income
+```{r}
+dfEmpDS_Log %>% 
+select(Age, TotalWorkingYears, YearsAtCompany, YearsInCurrentRole, lMonthlyIncome) %>% 
+ggpairs() %>% print(progress=F)
+```
+
+Highest correlated features with Monthly Income: TotalWorkingYears
+
+response variable:  MonthlyIncome
+Notice there appears to be a slight curve in the plot between MonthlyIncome and TotalWorkingYears so we'll add a quadratic term to address that
+Let's build the regression model
+```{r}
+
+SalaryModel1 = lm(lMonthlyIncome~ TotalWorkingYears + I(TotalWorkingYears^2) + JobRole, data=dfEmpDS_Log)
+```
+
+Let's examine the results.  The coefficients all appear to be significant with the exception of a couple of levels of the JobRole
+```{r}
+summary(SalaryModel1)
+```
+
+Let's check the residual Sum of Squares, Mean Squared Error and Root Mean Squared Error
+```{r}
+#residual sum of squares
+RSS = c(crossprod(SalaryModel1$residuals))
+RSS
+#Mean Squared Error
+MSE = RSS / length(SalaryModel1$residuals)
+MSE
+#Root MSE
+RMSE = sqrt(MSE)
+RMSE
+```
+
+Let's back transform RMSE since it's based on the log of Monthly Income
+```{r}
+exp(RMSE)
+```
+
+
+Let's look at how well the model predicts salary compared to the actual salary data we have
+```{r}
+#here we can plug in one of the job roles that we want to evaluate
+testRole = "Research Scientist"
+dfPlotSpecific = dfEmpDS_Log %>% filter(dfEmpDS_Log$JobRole == testRole)
+plot(dfPlotSpecific$TotalWorkingYears,dfPlotSpecific$lMonthlyIncome, xlab="Total Working Years",ylab="Monthly Income", main= testRole)
+new<-data.frame(TotalWorkingYears=seq(0,40,.1), JobRole = testRole)
+lines(seq(0,40,.1),predict(SalaryModel1,newdata=new),col="red",lwd=4)
+
+```
+
+Plotting residuals on TotalWorkingYears we see nice constant variance
+```{r}
+plot(dfEmpDS_Log$TotalWorkingYears ,SalaryModel1$residuals,xlab="TotalWorkingYears",ylab="Residuals")
+```
+
+The residual plot indicates no pattern which is what we want
+```{r}
+plot(SalaryModel1$fitted.values,SalaryModel1$residuals,xlab="Fitted Values",ylab="Residuals")
+
+```
+
+Now we need to perform the monthly income prediction using the data set “CaseStudy2CompSet No Salary.csv”, which has no Salary data. First we load the data.
+```{r}
+#load the data
+dfToPredict = read.csv("C:/Users/BGaither/OneDrive - McAfee/Other/school/SMU/Courses/Spring 2020/Doing Data Science/Project2/CaseStudy2CompSet No Salary.csv",header = TRUE)
+
+```
+
+Use the model to predict the monthly salaries and add it to the dataframe
+```{r}
+
+dfToPredict$MonthlyIncome = exp(predict(SalaryModel1,newdata=data.frame(TotalWorkingYears = dfToPredict$TotalWorkingYears, JobRole = dfToPredict$JobRole)))
+
+```
+
+Let's check our work with plots
+```{r}
+
+#here we can plug in one of the job roles that we want to evaluate
+testRole = "Sales Representative"
+dfPlotSpecific = dfToPredict %>% filter(dfToPredict$JobRole == testRole)
+plot(dfPlotSpecific$TotalWorkingYears,dfPlotSpecific$MonthlyIncome, xlab="Total Working Years",ylab="Monthly Income", main= testRole)
+new<-data.frame(TotalWorkingYears=seq(0,40,.1), JobRole = testRole)
+lines(seq(0,40,.1),exp(predict(SalaryModel1,newdata=new)),col="red",lwd=4)
+
+```
+
+
+Now that we have the dataframe with the predicted MonthlyIncome column, output the dataframe with classifications to a csv file for grading.
+```{r}
+write.csv(dfToPredict,"C:/Users/BGaither/OneDrive - McAfee/Other/school/SMU/Courses/Spring 2020/Doing Data Science/Project2/Case2Predictions_Gaither_Salary.csv", row.names = FALSE)
+```
+
