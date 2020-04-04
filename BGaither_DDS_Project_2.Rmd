@@ -4,6 +4,8 @@ author: "Bgaither"
 date: "3/17/2020"
 output: html_document
 ---
+<a href="https://youtu.be/3gqwoLxeDtQ">Presentation Video Can Be Found Here</a>
+<p><P>
 
 #Doing Data Science - Case Study 2
 
