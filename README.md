@@ -8,7 +8,9 @@ Video of presentation:  https://youtu.be/3gqwoLxeDtQ
 
 The Frito-Lay executive leadership team has identified predicting employee turnover as its first application of data science for talent management.  However, before the business gives the green light on the project, it has been requested that we conduct an analysis of existing employee data.
 
-This particular project is focused on two areas: 
+This particular project is focused on two areas:  Attrition Classification and Prediction of Monthly Income.
+
+The findings of this Analysis are below:
 1. **Attrition**
   + Identify the top three factors that contribute to turnover
 	+ Amount of Overtime
@@ -23,4 +25,5 @@ This particular project is focused on two areas:
 2. **Salary**
   + Develop a model that will predict salaries
 	+ Multiple Linear Regression model was developed with an adjusted R-Square of 0.7997
+
 
