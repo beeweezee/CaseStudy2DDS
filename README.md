@@ -2,6 +2,8 @@
 Doing Data Science Project 2
 Brian Gaither
 
+Video of presentation:  https://youtu.be/3gqwoLxeDtQ
+
 ## Executive Summary
 
 The Frito-Lay executive leadership team has identified predicting employee turnover as its first application of data science for talent management.  However, before the business gives the green light on the project, it has been requested that we conduct an analysis of existing employee data.
